@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +8,13 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
     {% block extra_css %}{% endblock %}
+    <script>
+        /* Apply saved theme before render to prevent flash */
+        (function() {
+            var t = localStorage.getItem('sa-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
@@ -59,13 +66,21 @@
                     </li>
                     {% endif %}
                 </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item dropdown">
+                <ul class="navbar-nav align-items-center">
+                    <!-- Theme Toggle -->
+                    <li class="nav-item">
+                        <button class="theme-toggle" id="themeToggle" title="Toggle theme" aria-label="Toggle light/dark theme">
+                            <i class="bi bi-sun-fill" id="iconSun"></i>
+                            <i class="bi bi-moon-fill" id="iconMoon" style="display:none;"></i>
+                        </button>
+                    </li>
+                    <!-- User Dropdown -->
+                    <li class="nav-item dropdown ms-1">
                         <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
                            data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-person-circle"></i> {{ current_user.name }}
                             {% if current_user.role == 'admin' %}
-                            <span class="badge bg-danger ms-1" style="font-size:10px;">Admin</span>
+                            <span class="badge bg-danger ms-1" style="font-size:10px; vertical-align:middle;">Admin</span>
                             {% endif %}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
@@ -84,8 +99,14 @@
                     </li>
                 </ul>
                 {% else %}
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav ms-auto align-items-center">
                     <li class="nav-item">
+                        <button class="theme-toggle" id="themeToggle" title="Toggle theme" aria-label="Toggle light/dark theme">
+                            <i class="bi bi-sun-fill" id="iconSun"></i>
+                            <i class="bi bi-moon-fill" id="iconMoon" style="display:none;"></i>
+                        </button>
+                    </li>
+                    <li class="nav-item ms-1">
                         <a class="nav-link" href="{{ url_for('login') }}">
                             <i class="bi bi-box-arrow-in-right"></i> Login
                         </a>
@@ -101,6 +122,7 @@
             {% if messages %}
                 {% for category, message in messages %}
                     <div class="alert alert-{{ category }} alert-dismissible fade show mb-4" role="alert">
+                        <i class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}exclamation-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
@@ -118,6 +140,39 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        /* ── Theme Toggle Logic ── */
+        (function() {
+            var html       = document.documentElement;
+            var btn        = document.getElementById('themeToggle');
+            var iconSun    = document.getElementById('iconSun');
+            var iconMoon   = document.getElementById('iconMoon');
+
+            function applyTheme(theme) {
+                html.setAttribute('data-theme', theme);
+                localStorage.setItem('sa-theme', theme);
+                if (theme === 'dark') {
+                    iconSun.style.display  = 'block';
+                    iconMoon.style.display = 'none';
+                    btn.setAttribute('title', 'Switch to light mode');
+                } else {
+                    iconSun.style.display  = 'none';
+                    iconMoon.style.display = 'block';
+                    btn.setAttribute('title', 'Switch to dark mode');
+                }
+            }
+
+            /* Set correct icon on load */
+            applyTheme(localStorage.getItem('sa-theme') || 'dark');
+
+            btn.addEventListener('click', function() {
+                var current = html.getAttribute('data-theme') || 'dark';
+                applyTheme(current === 'dark' ? 'light' : 'dark');
+            });
+        })();
+    </script>
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>
