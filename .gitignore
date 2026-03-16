@@ -1,0 +1,37 @@
+# Virtual environment
+venv/
+env/
+.venv/
+.venv310/
+
+# Database
+*.db
+instance/
+
+# SSL Certificates (regenerate on server)
+cert.pem
+key.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Exports
+exports/*.xlsx
+
+# Environment variables
+.env
+.env.local

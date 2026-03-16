@@ -1,0 +1,375 @@
+{% extends "base.html" %}
+{% block title %}Live Attendance — Smart Attendance{% endblock %}
+
+{% block extra_css %}
+<style>
+  .camera-container { position: relative; background: #000; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+  .camera-feed { width: 100%; max-width: 640px; border-radius: 0; display: block; }
+  .camera-feed.active { border-color: var(--success); }
+  #overlayCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  #canvas { display: none; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .status-dot.running { background: var(--success); box-shadow: 0 0 0 3px rgba(52,201,122,0.2); animation: pulse 1.5s infinite; }
+  .status-dot.stopped { background: var(--text-dim); }
+  @keyframes pulse { 0%,100%{ box-shadow:0 0 0 3px rgba(52,201,122,0.2);} 50%{ box-shadow:0 0 0 6px rgba(52,201,122,0.05);} }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-camera-video-fill"></i> Live Attendance</h1>
+    <p>Students are recognized automatically as they enter</p>
+  </div>
+  <span class="badge {% if current_class %}bg-success{% else %}bg-secondary{% endif %}" style="font-size:12.5px; padding:8px 14px;">
+    {% if current_class %}
+      <i class="bi bi-broadcast"></i> {{ current_class.subject }} ({{ current_class.class_name }})
+    {% else %}
+      <i class="bi bi-dash-circle"></i> No Active Class
+    {% endif %}
+  </span>
+</div>
+
+<div class="row g-3">
+  <!-- Camera -->
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h5><i class="bi bi-camera-fill"></i> Camera Feed</h5>
+        <div class="d-flex align-items-center gap-2">
+          <span class="status-dot stopped" id="statusDot"></span>
+          <span id="statusText" style="font-size:12.5px; color:var(--text-muted);">Stopped</span>
+        </div>
+      </div>
+      <div class="card-body text-center" style="padding: 0 0 20px;">
+        <div class="camera-container">
+          <video id="video" autoplay playsinline class="camera-feed"></video>
+          <canvas id="overlayCanvas"></canvas>
+          <canvas id="canvas"></canvas>
+        </div>
+        <div class="d-flex justify-content-center gap-3 mt-4">
+          <button class="btn btn-success btn-lg" id="startBtn">
+            <i class="bi bi-play-fill"></i> Start Attendance
+          </button>
+          <button class="btn btn-danger btn-lg" id="stopBtn" disabled>
+            <i class="bi bi-stop-fill"></i> Stop
+          </button>
+        </div>
+        <div id="noClassAlert" class="alert alert-warning mt-3 mx-3" style="display:none;">
+          <i class="bi bi-exclamation-triangle"></i>
+          No class is currently scheduled. Please check the timetable.
+        </div>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="card mt-3">
+      <div class="card-header">
+        <h5><i class="bi bi-list-check"></i> Attendance Log</h5>
+        <span class="badge bg-secondary" id="logCount">0 entries</span>
+      </div>
+      <div class="card-body attendance-log" id="attendanceLog">
+        <div class="text-center py-4" id="emptyLog" style="color:var(--text-dim);">
+          <i class="bi bi-inbox" style="font-size:32px;"></i>
+          <p class="mt-2" style="font-size:13.5px; color:var(--text-muted);">Log will appear here once recognition starts</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Side Panel -->
+  <div class="col-md-4">
+    <!-- Session Stats -->
+    <div class="card mb-3">
+      <div class="card-header">
+        <h5><i class="bi bi-bar-chart-fill"></i> Session Stats</h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-2 text-center">
+          <div class="col-4">
+            <div style="font-size:26px; font-weight:700; color:var(--success);" id="statRecognized">0</div>
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted);">Marked</div>
+          </div>
+          <div class="col-4">
+            <div style="font-size:26px; font-weight:700; color:var(--warning);" id="statPending">0</div>
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted);">Pending</div>
+          </div>
+          <div class="col-4">
+            <div style="font-size:26px; font-weight:700; color:var(--danger);" id="statUnknown">0</div>
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted);">Unknown</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pending Confirmations -->
+    <div class="card">
+      <div class="card-header">
+        <h5><i class="bi bi-question-circle-fill"></i> Pending Review</h5>
+        <button class="btn btn-sm btn-outline-secondary" onclick="refreshPending()">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+      <div class="card-body" id="pendingList">
+        <p class="text-center" style="color:var(--text-muted); font-size:13px; margin:0;">No pending confirmations</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-question-circle"></i> Confirm Identity</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-center mb-4">
+          <img id="modalImage" src="" class="img-fluid" style="max-height:180px; border-radius:var(--radius); border:1px solid var(--border);">
+        </div>
+        <p style="font-size:13.5px;">Detected: <strong id="modalStudentName"></strong></p>
+        <p style="font-size:13.5px;">Confidence: <span id="modalConfidence" class="badge bg-warning"></span></p>
+        <div class="mb-3 mt-3">
+          <label class="form-label">Confirm identity?</label>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="confirmChoice" id="confirmYes" value="yes" checked>
+            <label class="form-check-label" for="confirmYes">Yes, this is correct</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="confirmChoice" id="confirmNo" value="no">
+            <label class="form-check-label" for="confirmNo">No, this is someone else</label>
+          </div>
+        </div>
+        <div id="correctStudentSelect" style="display:none;">
+          <label class="form-label">Select correct student</label>
+          <select class="form-select" id="correctStudent"></select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="rejectConfirmation()">
+          <i class="bi bi-x"></i> Reject
+        </button>
+        <button type="button" class="btn btn-success" onclick="submitConfirmation()">
+          <i class="bi bi-check"></i> Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const overlayCanvas = document.getElementById('overlayCanvas');
+  const overlayCtx = overlayCanvas.getContext('2d');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const attendanceLog = document.getElementById('attendanceLog');
+  const emptyLog = document.getElementById('emptyLog');
+  const noClassAlert = document.getElementById('noClassAlert');
+  const logCount = document.getElementById('logCount');
+
+  let stream = null, isRunning = false, processInterval = null, detectInterval = null;
+  let currentPendingId = null, detectedFaces = [], isDetecting = false, isProcessing = false;
+  let lastLogAtByMessage = {};
+  let logEntryCount = 0;
+  let stats = { recognized: 0, pending: 0, unknown: 0 };
+
+  function drawFaceBoxes() {
+    if (!video.videoWidth) return;
+    overlayCanvas.width = video.videoWidth;
+    overlayCanvas.height = video.videoHeight;
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    for (const face of detectedFaces) {
+      const loc = face.location;
+      const x = loc.left, y = loc.top, w = loc.right - loc.left, h = loc.bottom - loc.top;
+      let color = '#f25c5c';
+      if (face.match_type === 'high') color = '#34c97a';
+      else if (face.match_type === 'low') color = '#f5a623';
+      if (face.wrong_class) color = '#fd7e14';
+      overlayCtx.strokeStyle = color;
+      overlayCtx.lineWidth = 2;
+      overlayCtx.strokeRect(x, y, w, h);
+      const label = face.name + (face.confidence ? ` ${face.confidence}%` : '');
+      overlayCtx.font = 'bold 13px DM Sans, sans-serif';
+      const tw = overlayCtx.measureText(label).width;
+      overlayCtx.fillStyle = color;
+      overlayCtx.fillRect(x, y - 22, tw + 12, 22);
+      overlayCtx.fillStyle = '#fff';
+      overlayCtx.fillText(label, x + 6, y - 6);
+    }
+  }
+
+  async function detectFacesPreview() {
+    if (!isRunning || isDetecting) return;
+    isDetecting = true;
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    try {
+      const r = await fetch('/attendance/detect', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({image: canvas.toDataURL('image/jpeg', 0.6)}) });
+      const result = await r.json();
+      if (result.success) { detectedFaces = result.faces; drawFaceBoxes(); }
+    } catch(e) {} finally { isDetecting = false; }
+  }
+
+  async function start() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video:{ width:{ideal:640}, height:{ideal:480}, facingMode:'user' } });
+      video.srcObject = stream;
+      video.classList.add('active');
+      isRunning = true;
+      startBtn.disabled = true; stopBtn.disabled = false;
+      statusDot.className = 'status-dot running';
+      statusText.textContent = 'Running';
+      noClassAlert.style.display = 'none';
+      detectInterval = setInterval(detectFacesPreview, 1200);
+      processInterval = setInterval(processFrame, 3000);
+    } catch(err) { alert('Camera error: ' + err.message); }
+  }
+
+  function stop() {
+    isRunning = false;
+    clearInterval(processInterval); clearInterval(detectInterval);
+    processInterval = null; detectInterval = null;
+    detectedFaces = [];
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    video.srcObject = null; video.classList.remove('active');
+    startBtn.disabled = false; stopBtn.disabled = true;
+    statusDot.className = 'status-dot stopped';
+    statusText.textContent = 'Stopped';
+  }
+
+  async function processFrame() {
+    if (!isRunning || isProcessing) return;
+    isProcessing = true;
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    try {
+      const r = await fetch('/attendance/process', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({image: canvas.toDataURL('image/jpeg', 0.8)}) });
+      const result = await r.json();
+      if (result.no_class) { noClassAlert.style.display = 'block'; return; }
+      if (result.success && result.message && shouldLogResult(result)) addLogEntry(result);
+    } catch(e) {} finally { isProcessing = false; }
+  }
+
+  function shouldLogResult(result) {
+    const msg = result.message || ''; if (!msg) return false;
+    const now = Date.now();
+    const noisy = result.already_marked || result.match_type === 'unknown';
+    const window = noisy ? 10000 : 2000;
+    if (now - (lastLogAtByMessage[msg] || 0) < window) return false;
+    lastLogAtByMessage[msg] = now; return true;
+  }
+
+  function addLogEntry(result) {
+    emptyLog.style.display = 'none';
+    let cls = '';
+    if (result.marked) { cls = 'success'; stats.recognized++; }
+    else if (result.pending) { cls = 'warning'; stats.pending++; refreshPending(); }
+    else if (result.match_type === 'unknown') { cls = 'danger'; stats.unknown++; }
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${cls}`;
+    const time = new Date().toLocaleTimeString();
+    entry.innerHTML = `
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <strong style="font-size:13.5px;">${result.message}</strong>
+          ${result.student ? `<div style="font-size:12px; color:var(--text-muted); margin-top:2px;">${result.student.roll_number} · ${result.student.class_name}</div>` : ''}
+        </div>
+        <small style="color:var(--text-dim); white-space:nowrap; margin-left:12px;">${time}</small>
+      </div>`;
+    attendanceLog.insertBefore(entry, attendanceLog.firstChild);
+    logEntryCount++;
+    logCount.textContent = `${logEntryCount} entries`;
+    const entries = attendanceLog.querySelectorAll('.log-entry');
+    if (entries.length > 60) entries[entries.length-1].remove();
+    updateStats();
+  }
+
+  function updateStats() {
+    document.getElementById('statRecognized').textContent = stats.recognized;
+    document.getElementById('statPending').textContent = stats.pending;
+    document.getElementById('statUnknown').textContent = stats.unknown;
+  }
+
+  async function refreshPending() {
+    try {
+      const r = await fetch('/attendance/pending');
+      const pending = await r.json();
+      const container = document.getElementById('pendingList');
+      if (pending.length === 0) {
+        container.innerHTML = '<p class="text-center" style="color:var(--text-muted); font-size:13px; margin:0;">No pending confirmations</p>';
+        return;
+      }
+      container.innerHTML = pending.map(p => `
+        <div class="pending-card card mb-2">
+          <div class="card-body p-2">
+            <div class="d-flex align-items-center gap-2">
+              <img src="${p.image}" class="pending-image">
+              <div class="flex-grow-1">
+                <div style="font-weight:600; font-size:13.5px;">${p.student_name}</div>
+                <div style="font-size:12px; color:var(--text-muted);">${p.student_roll}</div>
+                <span class="badge bg-warning mt-1">${(p.confidence*100).toFixed(0)}%</span>
+              </div>
+              <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-success" onclick="quickConfirm(${p.id},true)"><i class="bi bi-check"></i></button>
+                <button class="btn btn-sm btn-danger" onclick="quickConfirm(${p.id},false)"><i class="bi bi-x"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>`).join('');
+    } catch(e) {}
+  }
+
+  async function quickConfirm(id, confirmed) {
+    try {
+      await fetch(`/attendance/confirm/${id}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({confirmed}) });
+      if (confirmed) { stats.recognized++; stats.pending--; } else { stats.pending--; }
+      updateStats(); refreshPending();
+    } catch(e) {}
+  }
+
+  document.querySelectorAll('input[name="confirmChoice"]').forEach(r => {
+    r.addEventListener('change', function() {
+      document.getElementById('correctStudentSelect').style.display = this.value==='no' ? 'block' : 'none';
+    });
+  });
+
+  async function loadStudents() {
+    try {
+      const r = await fetch('/api/students');
+      const students = await r.json();
+      const sel = document.getElementById('correctStudent');
+      sel.innerHTML = students.map(s => `<option value="${s.id}">${s.name} (${s.roll_number})</option>`).join('');
+    } catch(e) {}
+  }
+
+  async function submitConfirmation() {
+    const isCorrect = document.getElementById('confirmYes').checked;
+    const correctStudentId = isCorrect ? null : document.getElementById('correctStudent').value;
+    try {
+      await fetch(`/attendance/confirm/${currentPendingId}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({confirmed:true, correct_student_id:correctStudentId}) });
+      stats.recognized++; stats.pending--;
+      updateStats(); refreshPending();
+      bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
+    } catch(e) {}
+  }
+
+  async function rejectConfirmation() {
+    if (currentPendingId) await quickConfirm(currentPendingId, false);
+  }
+
+  startBtn.addEventListener('click', start);
+  stopBtn.addEventListener('click', stop);
+  loadStudents(); refreshPending();
+  window.addEventListener('beforeunload', stop);
+</script>
+{% endblock %}

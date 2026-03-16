@@ -1,0 +1,266 @@
+{% extends 'base.html' %}
+{% block title %}Staff — Smart Attendance{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-person-gear"></i> Staff Management</h1>
+    <p>Manage staff accounts and class assignments</p>
+  </div>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStaffModal">
+    <i class="bi bi-plus-lg"></i> Add Staff
+  </button>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Name</th><th>Username</th><th>Email</th><th>Role</th>
+            <th>Classes</th><th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in staff %}
+          <tr>
+            <td><strong style="font-size:13.5px;">{{ user.name }}</strong></td>
+            <td><code>{{ user.username }}</code></td>
+            <td style="color:var(--text-muted);">{{ user.email }}</td>
+            <td>
+              {% if user.role == 'admin' %}
+              <span class="badge bg-danger">Admin</span>
+              {% else %}
+              <span class="badge bg-primary">Staff</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if user.role == 'admin' %}
+              <span style="color:var(--text-muted); font-size:13px;">All Classes</span>
+              {% else %}
+                {% set classes = user.get_class_names() %}
+                {% if classes %}
+                  {% for class_name in classes %}
+                  <span class="badge bg-secondary me-1">{{ class_name }}</span>
+                  {% endfor %}
+                {% else %}
+                <span style="color:var(--text-dim); font-size:13px;">None</span>
+                {% endif %}
+              {% endif %}
+            </td>
+            <td>
+              {% if user.is_active %}
+              <span class="badge bg-success">Active</span>
+              {% else %}
+              <span class="badge bg-secondary">Inactive</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-primary" onclick="editStaff({{ user.id }}, '{{ user.name }}', '{{ user.email }}', '{{ user.role }}', {{ user.is_active | tojson }}, {{ user.get_class_names() | tojson }})">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                {% if user.id != current_user.id %}
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteStaff({{ user.id }}, '{{ user.name }}')">
+                  <i class="bi bi-trash"></i>
+                </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add Staff Modal -->
+<div class="modal fade" id="addStaffModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus-fill"></i> Add Staff Member</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="addStaffForm">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Full Name</label>
+              <input type="text" class="form-control" id="name" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Username</label>
+              <input type="text" class="form-control" id="username" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-control" id="email" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Password</label>
+              <input type="password" class="form-control" id="password" required minlength="6">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Role</label>
+              <select class="form-select" id="role">
+                <option value="staff">Staff</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          <div class="mt-3" id="classesSection">
+            <label class="form-label">Assign Classes</label>
+            <div class="row g-2">
+              {% for class_name in all_classes %}
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input class-checkbox" type="checkbox" value="{{ class_name }}" id="class_{{ loop.index }}">
+                  <label class="form-check-label" for="class_{{ loop.index }}">{{ class_name }}</label>
+                </div>
+              </div>
+              {% endfor %}
+              {% if not all_classes %}
+              <p style="color:var(--text-muted); font-size:13px;">No classes available yet.</p>
+              {% endif %}
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="addStaff()">
+          <i class="bi bi-plus-lg"></i> Add Staff
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Staff Modal -->
+<div class="modal fade" id="editStaffModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Staff Member</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editStaffForm">
+          <input type="hidden" id="edit_id">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Full Name</label>
+              <input type="text" class="form-control" id="edit_name" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-control" id="edit_email" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">New Password <span style="color:var(--text-dim); font-weight:400;">(leave blank to keep)</span></label>
+              <input type="password" class="form-control" id="edit_password" minlength="6">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Role</label>
+              <select class="form-select" id="edit_role">
+                <option value="staff">Staff</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check form-switch mt-2">
+                <input class="form-check-input" type="checkbox" id="edit_is_active" checked>
+                <label class="form-check-label" for="edit_is_active">Account Active</label>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3" id="editClassesSection">
+            <label class="form-label">Assign Classes</label>
+            <div class="row g-2">
+              {% for class_name in all_classes %}
+              <div class="col-md-4">
+                <div class="form-check">
+                  <input class="form-check-input edit-class-checkbox" type="checkbox" value="{{ class_name }}" id="edit_class_{{ loop.index }}">
+                  <label class="form-check-label" for="edit_class_{{ loop.index }}">{{ class_name }}</label>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="updateStaff()">
+          <i class="bi bi-check-lg"></i> Update
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.getElementById('role').addEventListener('change', function() {
+    document.getElementById('classesSection').style.display = this.value === 'admin' ? 'none' : 'block';
+  });
+  document.getElementById('edit_role').addEventListener('change', function() {
+    document.getElementById('editClassesSection').style.display = this.value === 'admin' ? 'none' : 'block';
+  });
+
+  function addStaff() {
+    const classes = [...document.querySelectorAll('.class-checkbox:checked')].map(c => c.value);
+    fetch('/admin/staff/add', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        name: document.getElementById('name').value,
+        username: document.getElementById('username').value,
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value,
+        role: document.getElementById('role').value,
+        classes
+      })
+    }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Error'); });
+  }
+
+  function editStaff(id, name, email, role, isActive, classes) {
+    document.getElementById('edit_id').value = id;
+    document.getElementById('edit_name').value = name;
+    document.getElementById('edit_email').value = email;
+    document.getElementById('edit_role').value = role;
+    document.getElementById('edit_is_active').checked = isActive;
+    document.getElementById('edit_password').value = '';
+    document.getElementById('editClassesSection').style.display = role === 'admin' ? 'none' : 'block';
+    document.querySelectorAll('.edit-class-checkbox').forEach(cb => { cb.checked = classes.includes(cb.value); });
+    new bootstrap.Modal(document.getElementById('editStaffModal')).show();
+  }
+
+  function updateStaff() {
+    const id = document.getElementById('edit_id').value;
+    const password = document.getElementById('edit_password').value;
+    const classes = [...document.querySelectorAll('.edit-class-checkbox:checked')].map(c => c.value);
+    const data = {
+      name: document.getElementById('edit_name').value,
+      email: document.getElementById('edit_email').value,
+      role: document.getElementById('edit_role').value,
+      is_active: document.getElementById('edit_is_active').checked,
+      classes
+    };
+    if (password) data.password = password;
+    fetch(`/admin/staff/${id}/update`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)
+    }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Error'); });
+  }
+
+  function deleteStaff(id, name) {
+    if (confirm(`Delete ${name}?`)) {
+      fetch(`/admin/staff/${id}/delete`, { method:'POST', headers:{'Content-Type':'application/json'} })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Error'); });
+    }
+  }
+</script>
+{% endblock %}

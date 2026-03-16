@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Register Student — Smart Attendance{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-person-plus-fill"></i> Register New Student</h1>
+  <p>Capture multiple face images for accurate recognition</p>
+</div>
+
+<div class="row g-3">
+  <!-- Form -->
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header">
+        <h5><i class="bi bi-person-badge"></i> Student Details</h5>
+      </div>
+      <div class="card-body">
+        <form id="registerForm">
+          <div class="mb-3">
+            <label for="name" class="form-label">Full Name</label>
+            <input type="text" class="form-control" id="name" placeholder="e.g. Arjun Sharma" required>
+          </div>
+          <div class="mb-3">
+            <label for="roll_number" class="form-label">Roll Number</label>
+            <input type="text" class="form-control" id="roll_number" placeholder="e.g. CS21B001" required>
+          </div>
+          <div class="mb-3">
+            <label for="class_name" class="form-label">Class</label>
+            <input type="text" class="form-control" id="class_name" placeholder="e.g. CSE-A" required>
+          </div>
+          <div class="mb-4">
+            <label for="department" class="form-label">Department</label>
+            <input type="text" class="form-control" id="department" placeholder="e.g. Computer Science" required>
+          </div>
+
+          <div class="alert alert-info mb-4" style="font-size:13px;">
+            <i class="bi bi-info-circle"></i>
+            Capture <strong>3–5 images</strong> from different angles for best accuracy.
+          </div>
+
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+              <i class="bi bi-check-lg"></i> Register Student
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Camera -->
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header">
+        <h5><i class="bi bi-camera-fill"></i> Face Capture</h5>
+        <span id="imageCountBadge" class="badge bg-secondary">0 / 5 images</span>
+      </div>
+      <div class="card-body">
+        <div class="camera-container text-center mb-3">
+          <video id="video" autoplay playsinline class="camera-feed"></video>
+          <canvas id="canvas" style="display:none;"></canvas>
+        </div>
+        <div class="d-flex gap-2 justify-content-center mb-4">
+          <button type="button" class="btn btn-outline-secondary" id="startCameraBtn">
+            <i class="bi bi-play"></i> Start Camera
+          </button>
+          <button type="button" class="btn btn-success" id="captureBtn" disabled>
+            <i class="bi bi-camera"></i> Capture
+          </button>
+        </div>
+
+        <div>
+          <div style="font-size:12.5px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted); margin-bottom:10px;">
+            Captured Images (<span id="imageCount">0</span>)
+          </div>
+          <div id="imagePreview" class="d-flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal fade" id="successModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-success">
+        <h5 class="modal-title"><i class="bi bi-check-circle-fill"></i> Student Registered</h5>
+      </div>
+      <div class="modal-body">
+        <p id="successMessage" style="font-size:14px;">Student registered successfully!</p>
+      </div>
+      <div class="modal-footer">
+        <a href="/students" class="btn btn-outline-secondary">View All Students</a>
+        <button type="button" class="btn btn-primary" onclick="location.reload()">Register Another</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const captureBtn = document.getElementById('captureBtn');
+  const startCameraBtn = document.getElementById('startCameraBtn');
+  const submitBtn = document.getElementById('submitBtn');
+  const imagePreview = document.getElementById('imagePreview');
+
+  let stream = null, capturedImages = [];
+
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video:{ width:{ideal:640}, height:{ideal:480}, facingMode:'user' } });
+      video.srcObject = stream;
+      captureBtn.disabled = false;
+      startCameraBtn.disabled = true;
+      startCameraBtn.innerHTML = '<i class="bi bi-check"></i> Active';
+    } catch(err) { alert('Camera error: ' + err.message); }
+  }
+
+  startCameraBtn.addEventListener('click', startCamera);
+
+  captureBtn.addEventListener('click', function() {
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    const img = canvas.toDataURL('image/jpeg', 0.8);
+    capturedImages.push(img);
+    refreshPreview(); updateCount();
+  });
+
+  window.removeImage = function(index) {
+    capturedImages.splice(index, 1); refreshPreview(); updateCount();
+  };
+
+  function refreshPreview() {
+    imagePreview.innerHTML = '';
+    capturedImages.forEach((img, i) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'position-relative';
+      wrap.innerHTML = `
+        <img src="${img}" class="captured-image" style="width:90px; height:90px; object-fit:cover; border-radius:var(--radius-sm);">
+        <button type="button" class="btn btn-sm btn-danger position-absolute"
+          style="top:-6px; right:-6px; padding:0 5px; font-size:11px; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center;"
+          onclick="removeImage(${i})">
+          <i class="bi bi-x"></i>
+        </button>`;
+      imagePreview.appendChild(wrap);
+    });
+  }
+
+  function updateCount() {
+    const n = capturedImages.length;
+    document.getElementById('imageCount').textContent = n;
+    document.getElementById('imageCountBadge').textContent = `${n} / 5 images`;
+    document.getElementById('imageCountBadge').className = n >= 3 ? 'badge bg-success' : 'badge bg-secondary';
+    submitBtn.disabled = n < 1;
+  }
+
+  document.getElementById('registerForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    if (capturedImages.length < 1) { alert('Capture at least one face image'); return; }
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing…';
+    const data = {
+      name: document.getElementById('name').value,
+      roll_number: document.getElementById('roll_number').value,
+      class_name: document.getElementById('class_name').value,
+      department: document.getElementById('department').value,
+      images: capturedImages
+    };
+    try {
+      const r = await fetch('/students/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      const result = await r.json();
+      if (result.success) {
+        document.getElementById('successMessage').textContent = result.message;
+        new bootstrap.Modal(document.getElementById('successModal')).show();
+      } else { alert('Error: ' + result.error); }
+    } catch(err) { alert('Error: ' + err.message); }
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Register Student';
+  });
+
+  window.addEventListener('beforeunload', function() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+  });
+</script>
+{% endblock %}

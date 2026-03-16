@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Settings — Smart Attendance{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-sliders"></i> Settings</h1>
+  <p>Configure face recognition and system behaviour</p>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h5><i class="bi bi-cpu-fill"></i> Face Recognition</h5>
+      </div>
+      <div class="card-body">
+        <form id="settingsForm">
+          <!-- Low Threshold -->
+          <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="form-label mb-0">Low Confidence Threshold</label>
+              <span class="badge bg-warning" id="lowThresholdValue">{{ "%.0f"|format(settings.low_confidence_threshold * 100) }}%</span>
+            </div>
+            <input type="range" class="form-range" id="lowThreshold"
+                   min="0.3" max="0.7" step="0.05" value="{{ settings.low_confidence_threshold }}">
+            <div class="form-text">Below this similarity — manual confirmation required. Lower = stricter.</div>
+          </div>
+
+          <!-- High Threshold -->
+          <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="form-label mb-0">High Confidence Threshold</label>
+              <span class="badge bg-success" id="highThresholdValue">{{ "%.0f"|format(settings.high_confidence_threshold * 100) }}%</span>
+            </div>
+            <input type="range" class="form-range" id="highThreshold"
+                   min="0.4" max="0.8" step="0.05" value="{{ settings.high_confidence_threshold }}">
+            <div class="form-text">Above this — auto-marked as present. Higher = more lenient.</div>
+          </div>
+
+          <div style="border-top:1px solid var(--border); margin: 20px 0;"></div>
+
+          <!-- Adaptive Learning -->
+          <div class="mb-4">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="adaptiveLearning" {{ 'checked' if settings.adaptive_learning else '' }}>
+              <label class="form-check-label" for="adaptiveLearning" style="font-weight:600; color:var(--text);">
+                Adaptive Learning
+              </label>
+            </div>
+            <div class="form-text mt-1">
+              Saves new face captures to improve future recognition over time.
+            </div>
+          </div>
+
+          <!-- Max Encodings -->
+          <div class="mb-4">
+            <label class="form-label">Max Face Encodings per Student</label>
+            <input type="number" class="form-control" id="maxEncodings"
+                   min="5" max="50" value="{{ settings.max_encodings_per_student }}" style="max-width:140px;">
+            <div class="form-text">Higher = better accuracy, more storage.</div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg"></i> Save Settings
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="resetDefaults()">
+              <i class="bi bi-arrow-counterclockwise"></i> Reset Defaults
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <!-- Legend -->
+    <div class="card mb-3">
+      <div class="card-header">
+        <h5><i class="bi bi-info-circle-fill"></i> Recognition Zones</h5>
+      </div>
+      <div class="card-body">
+        <div class="d-flex align-items-start gap-3 mb-3">
+          <span class="badge bg-success" style="min-width:70px; text-align:center;">High</span>
+          <div style="font-size:13px; color:var(--text-muted);">Auto-marked as present. Face clearly matched.</div>
+        </div>
+        <div class="d-flex align-items-start gap-3 mb-3">
+          <span class="badge bg-warning" style="min-width:70px; text-align:center;">Low</span>
+          <div style="font-size:13px; color:var(--text-muted);">Requires manual confirmation. Ambiguous match.</div>
+        </div>
+        <div class="d-flex align-items-start gap-3">
+          <span class="badge bg-danger" style="min-width:70px; text-align:center;">Unknown</span>
+          <div style="font-size:13px; color:var(--text-muted);">Not recognized. Not enrolled or very poor match.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Visualization -->
+    <div class="card">
+      <div class="card-header">
+        <h5><i class="bi bi-bar-chart-fill"></i> Threshold Bar</h5>
+      </div>
+      <div class="card-body">
+        <div style="border-radius:6px; overflow:hidden; height:24px; display:flex; border:1px solid var(--border);">
+          <div id="unknownZone" style="background:var(--danger); flex:1;"></div>
+          <div id="lowZone" style="background:var(--warning); flex:1;"></div>
+          <div id="highZone" style="background:var(--success); flex:1;"></div>
+        </div>
+        <div class="d-flex justify-content-between mt-2" style="font-size:11px; color:var(--text-muted);">
+          <span>0%</span>
+          <span id="lowMarker">50%</span>
+          <span id="highMarker">60%</span>
+          <span>100%</span>
+        </div>
+        <div class="mt-3" style="font-size:12px; color:var(--text-dim);">
+          <span style="color:var(--danger);">■</span> Unknown &nbsp;
+          <span style="color:var(--warning);">■</span> Review &nbsp;
+          <span style="color:var(--success);">■</span> Auto-mark
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const lowThreshold = document.getElementById('lowThreshold');
+  const highThreshold = document.getElementById('highThreshold');
+
+  function updateDisplay() {
+    const low = parseFloat(lowThreshold.value);
+    const high = parseFloat(highThreshold.value);
+    document.getElementById('lowThresholdValue').textContent = Math.round((1-low)*100) + '%';
+    document.getElementById('highThresholdValue').textContent = Math.round((1-high)*100) + '%';
+    document.getElementById('unknownZone').style.flex = (100 - high*100);
+    document.getElementById('lowZone').style.flex = ((high - low) * 100);
+    document.getElementById('highZone').style.flex = (low * 100);
+    document.getElementById('lowMarker').textContent = Math.round((1-low)*100) + '%';
+    document.getElementById('highMarker').textContent = Math.round((1-high)*100) + '%';
+  }
+
+  lowThreshold.addEventListener('input', function() {
+    if (parseFloat(this.value) > parseFloat(highThreshold.value)) this.value = highThreshold.value;
+    updateDisplay();
+  });
+
+  highThreshold.addEventListener('input', function() {
+    if (parseFloat(this.value) < parseFloat(lowThreshold.value)) this.value = lowThreshold.value;
+    updateDisplay();
+  });
+
+  updateDisplay();
+
+  document.getElementById('settingsForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const data = {
+      low_confidence_threshold: parseFloat(lowThreshold.value),
+      high_confidence_threshold: parseFloat(highThreshold.value),
+      adaptive_learning: document.getElementById('adaptiveLearning').checked,
+      max_encodings_per_student: parseInt(document.getElementById('maxEncodings').value)
+    };
+    try {
+      const r = await fetch('/settings/update', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      const result = await r.json();
+      if (result.success) alert('Settings saved.');
+    } catch(err) { alert('Error: ' + err.message); }
+  });
+
+  function resetDefaults() {
+    lowThreshold.value = 0.5;
+    highThreshold.value = 0.6;
+    document.getElementById('adaptiveLearning').checked = true;
+    document.getElementById('maxEncodings').value = 10;
+    updateDisplay();
+  }
+</script>
+{% endblock %}

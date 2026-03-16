@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Timetable — Smart Attendance{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-calendar-week-fill"></i> Timetable</h1>
+    <p>Manage class schedules and time slots</p>
+  </div>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+    <i class="bi bi-plus-lg"></i> Add Entry
+  </button>
+</div>
+
+<!-- Grid -->
+<div class="card mb-4">
+  <div class="card-header">
+    <h5><i class="bi bi-grid-3x3-gap-fill"></i> Weekly Schedule</h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-bordered mb-0">
+        <thead>
+          <tr>
+            <th style="width:12%; font-size:12px;">Time</th>
+            <th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
+          </tr>
+        </thead>
+        <tbody id="timetableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- List -->
+<div class="card">
+  <div class="card-header">
+    <h5><i class="bi bi-list-ul"></i> All Entries</h5>
+  </div>
+  <div class="card-body p-0">
+    {% if entries %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Day</th><th>Class</th><th>Subject</th><th>Start</th><th>End</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in entries %}
+          <tr>
+            <td style="color:var(--text-muted);">{{ ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][entry.day_of_week] }}</td>
+            <td><span class="badge bg-primary">{{ entry.class_name }}</span></td>
+            <td><strong style="font-size:13.5px;">{{ entry.subject }}</strong></td>
+            <td style="color:var(--text-muted); font-size:12.5px;">{{ entry.start_time.strftime('%H:%M') }}</td>
+            <td style="color:var(--text-muted); font-size:12.5px;">{{ entry.end_time.strftime('%H:%M') }}</td>
+            <td>
+              <button class="btn btn-sm btn-outline-danger" onclick="deleteEntry({{ entry.id }})">
+                <i class="bi bi-trash"></i>
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5" style="color:var(--text-dim);">
+      <i class="bi bi-calendar-x" style="font-size:40px;"></i>
+      <p class="mt-3" style="color:var(--text-muted); font-size:13.5px;">No entries yet. Add your first timetable slot.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-lg"></i> Add Timetable Entry</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="addForm">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Class</label>
+            <input type="text" class="form-control" id="class_name" list="classList" placeholder="e.g. CSE-A" required>
+            <datalist id="classList">
+              {% for cls in classes %}<option value="{{ cls }}">{% endfor %}
+            </datalist>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Day of Week</label>
+            <select class="form-select" id="day_of_week" required>
+              <option value="0">Monday</option><option value="1">Tuesday</option>
+              <option value="2">Wednesday</option><option value="3">Thursday</option>
+              <option value="4">Friday</option><option value="5">Saturday</option>
+              <option value="6">Sunday</option>
+            </select>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label">Start Time</label>
+              <input type="time" class="form-control" id="start_time" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label">End Time</label>
+              <input type="time" class="form-control" id="end_time" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Subject</label>
+            <input type="text" class="form-control" id="subject" placeholder="e.g. Data Structures" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add Entry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const entries = [{% for entry in entries %}{ id:{{entry.id}}, class_name:"{{entry.class_name}}", day_of_week:{{entry.day_of_week}}, subject:"{{entry.subject}}", start_time:"{{entry.start_time.strftime('%H:%M')}}", end_time:"{{entry.end_time.strftime('%H:%M')}}" }{% if not loop.last %},{% endif %}{% endfor %}];
+
+  function buildGrid() {
+    const timeSlots = [...new Set(entries.map(e => `${e.start_time}-${e.end_time}`))].sort();
+    const tbody = document.getElementById('timetableBody');
+    tbody.innerHTML = '';
+    if (!timeSlots.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4" style="color:var(--text-muted); font-size:13px;">No entries yet</td></tr>';
+      return;
+    }
+    timeSlots.forEach(slot => {
+      const [start, end] = slot.split('-');
+      const row = document.createElement('tr');
+      row.innerHTML = `<td style="font-size:12px; color:var(--text-muted); white-space:nowrap;">${start}–${end}</td>`;
+      for (let day = 0; day < 6; day++) {
+        const cell = document.createElement('td');
+        const entry = entries.find(e => e.day_of_week === day && e.start_time === start && e.end_time === end);
+        if (entry) {
+          cell.innerHTML = `<div class="timetable-entry" style="background:var(--accent-dim); border-radius:6px; padding:6px 8px;"><strong style="font-size:13px; color:var(--accent);">${entry.subject}</strong><div style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">${entry.class_name}</div></div>`;
+        }
+        row.appendChild(cell);
+      }
+      tbody.appendChild(row);
+    });
+  }
+
+  buildGrid();
+
+  document.getElementById('addForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const data = {
+      class_name: document.getElementById('class_name').value,
+      day_of_week: document.getElementById('day_of_week').value,
+      start_time: document.getElementById('start_time').value,
+      end_time: document.getElementById('end_time').value,
+      subject: document.getElementById('subject').value
+    };
+    try {
+      const r = await fetch('/timetable/add', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      const result = await r.json();
+      if (result.success) location.reload();
+    } catch(err) { alert('Error: ' + err.message); }
+  });
+
+  async function deleteEntry(id) {
+    if (!confirm('Delete this entry?')) return;
+    try {
+      const r = await fetch(`/timetable/${id}/delete`, { method:'POST' });
+      const result = await r.json();
+      if (result.success) location.reload();
+    } catch(err) { alert('Error: ' + err.message); }
+  }
+</script>
+{% endblock %}

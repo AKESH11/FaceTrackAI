@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Smart Attendance{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-speedometer2"></i> Dashboard</h1>
+    <p>Welcome back, {{ current_user.name }}</p>
+  </div>
+  {% if current_class %}
+  <span class="badge bg-success" style="font-size:13px; padding: 8px 14px;">
+    <i class="bi bi-broadcast"></i> {{ current_class.subject }} — Live
+  </span>
+  {% endif %}
+</div>
+
+<!-- Stat Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card stat-accent">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="stat-label">Total Students</div>
+          <div class="stat-value">{{ total_students }}</div>
+        </div>
+        <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card stat-success">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="stat-label">Today's Attendance</div>
+          <div class="stat-value">{{ today_attendance }}</div>
+        </div>
+        <div class="stat-icon"><i class="bi bi-check-circle-fill"></i></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card stat-warning">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="stat-label">Pending Review</div>
+          <div class="stat-value">{{ pending_count }}</div>
+        </div>
+        <div class="stat-icon"><i class="bi bi-hourglass-split"></i></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card stat-info">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="stat-label">Current Class</div>
+          <div class="stat-value" style="font-size:16px; letter-spacing:0;">
+            {% if current_class %}{{ current_class.subject }}{% else %}—{% endif %}
+          </div>
+        </div>
+        <div class="stat-icon"><i class="bi bi-calendar-check-fill"></i></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card mb-4">
+  <div class="card-header">
+    <h5><i class="bi bi-lightning-charge-fill"></i> Quick Actions</h5>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-6 col-md-3">
+        <a href="/students/register" class="quick-action qa-primary">
+          <i class="bi bi-person-plus-fill"></i>
+          <span>Register Student</span>
+        </a>
+      </div>
+      <div class="col-6 col-md-3">
+        <a href="/attendance" class="quick-action qa-success">
+          <i class="bi bi-camera-fill"></i>
+          <span>Start Attendance</span>
+        </a>
+      </div>
+      <div class="col-6 col-md-3">
+        <a href="/timetable" class="quick-action qa-info">
+          <i class="bi bi-calendar-plus-fill"></i>
+          <span>Add Timetable</span>
+        </a>
+      </div>
+      <div class="col-6 col-md-3">
+        <a href="/reports" class="quick-action qa-warning">
+          <i class="bi bi-download"></i>
+          <span>Export Report</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Current Class + Recent Attendance -->
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <h5><i class="bi bi-clock-fill"></i> Current Class</h5>
+      </div>
+      <div class="card-body d-flex flex-column justify-content-center text-center">
+        {% if current_class %}
+          <div style="font-size:28px; font-weight:700; color:var(--accent); letter-spacing:-1px; margin-bottom:12px;">
+            {{ current_class.subject }}
+          </div>
+          <p style="color:var(--text-muted); font-size:13.5px; margin-bottom:4px;">
+            <i class="bi bi-people"></i> {{ current_class.class_name }}
+          </p>
+          <p style="color:var(--text-muted); font-size:13.5px; margin-bottom:20px;">
+            <i class="bi bi-clock"></i>
+            {{ current_class.start_time.strftime('%H:%M') }} — {{ current_class.end_time.strftime('%H:%M') }}
+          </p>
+          <a href="/attendance" class="btn btn-success">
+            <i class="bi bi-camera-fill"></i> Start Taking Attendance
+          </a>
+        {% else %}
+          <div style="color:var(--text-dim); margin-bottom:16px;">
+            <i class="bi bi-calendar-x" style="font-size:40px;"></i>
+          </div>
+          <p style="color:var(--text-muted); font-size:13.5px; margin-bottom:16px;">
+            No class scheduled right now
+          </p>
+          <a href="/timetable" class="btn btn-outline-primary btn-sm">Manage Timetable</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h5><i class="bi bi-list-check"></i> Recent Attendance Today</h5>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_attendance %}
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Roll No.</th>
+                  <th>Subject</th>
+                  <th>Time</th>
+                  <th>Confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for record in recent_attendance %}
+                <tr>
+                  <td>{{ record.student.name }}</td>
+                  <td><code>{{ record.student.roll_number }}</code></td>
+                  <td>{{ record.subject }}</td>
+                  <td style="color:var(--text-muted);">{{ record.time_marked.strftime('%H:%M:%S') }}</td>
+                  <td>
+                    <span class="badge {% if record.confidence >= 0.8 %}bg-success{% elif record.confidence >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}">
+                      {{ "%.0f"|format(record.confidence * 100) }}%
+                    </span>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="text-center py-5" style="color:var(--text-dim);">
+            <i class="bi bi-inbox" style="font-size:36px;"></i>
+            <p class="mt-3" style="color:var(--text-muted); font-size:13.5px;">No attendance records today</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

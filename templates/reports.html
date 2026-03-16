@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Reports — Smart Attendance{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-file-earmark-bar-graph-fill"></i> Attendance Reports</h1>
+  <p>View, filter, and export attendance records</p>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label for="dateFilter" class="form-label">Date</label>
+        <input type="date" class="form-control" id="dateFilter" value="{{ dates[0] if dates else '' }}">
+      </div>
+      <div class="col-md-4">
+        <label for="classFilter" class="form-label">Class</label>
+        <select class="form-select" id="classFilter">
+          <option value="">All Classes</option>
+          {% for cls in classes %}
+          <option value="{{ cls }}">{{ cls }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary flex-grow-1" onclick="loadReport()">
+            <i class="bi bi-search"></i> Load
+          </button>
+          <button class="btn btn-success flex-grow-1" onclick="exportReport()">
+            <i class="bi bi-download"></i> Export
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Report Table -->
+<div class="card">
+  <div class="card-header">
+    <h5><i class="bi bi-table"></i> <span id="reportTitle">Attendance Report</span></h5>
+    <span class="badge bg-secondary" id="recordCount">0 records</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" id="reportTable">
+        <thead>
+          <tr>
+            <th>Roll No.</th>
+            <th>Student Name</th>
+            <th>Class</th>
+            <th>Department</th>
+            <th>Subject</th>
+            <th>Time</th>
+            <th>Confidence</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="reportBody">
+          <tr>
+            <td colspan="8" class="text-center py-5" style="color:var(--text-muted); font-size:13.5px;">
+              <i class="bi bi-calendar-search" style="font-size:28px; display:block; margin-bottom:10px; color:var(--text-dim);"></i>
+              Select a date and click Load to view attendance
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Dates -->
+{% if dates %}
+<div class="card mt-4">
+  <div class="card-header">
+    <h5><i class="bi bi-clock-history"></i> Recent Dates</h5>
+  </div>
+  <div class="card-body">
+    <div class="d-flex flex-wrap gap-2">
+      {% for d in dates[:14] %}
+      <button class="btn btn-outline-secondary btn-sm" onclick="selectDate('{{ d }}')">{{ d }}</button>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  let currentData = [];
+
+  function selectDate(d) {
+    document.getElementById('dateFilter').value = d;
+    loadReport();
+  }
+
+  async function loadReport() {
+    const date = document.getElementById('dateFilter').value;
+    const cls = document.getElementById('classFilter').value;
+    if (!date) { alert('Please select a date'); return; }
+    try {
+      const params = new URLSearchParams({ date, class: cls });
+      const r = await fetch(`/reports/data?${params}`);
+      currentData = await r.json();
+      renderTable(currentData);
+      document.getElementById('reportTitle').textContent = `Report — ${date}${cls ? ` (${cls})` : ''}`;
+      const badge = document.getElementById('recordCount');
+      badge.textContent = `${currentData.length} records`;
+      badge.className = currentData.length > 0 ? 'badge bg-success' : 'badge bg-secondary';
+    } catch(err) { alert('Error: ' + err.message); }
+  }
+
+  function renderTable(data) {
+    const tbody = document.getElementById('reportBody');
+    if (data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5" style="color:var(--text-muted); font-size:13.5px;">No records found for this date</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(r => `
+      <tr>
+        <td><code>${r.roll_number}</code></td>
+        <td><strong style="font-size:13.5px;">${r.student_name}</strong></td>
+        <td><span class="badge bg-primary">${r.class_name}</span></td>
+        <td style="color:var(--text-muted);">${r.department}</td>
+        <td>${r.subject}</td>
+        <td style="color:var(--text-muted); font-size:12.5px;">${r.time}</td>
+        <td><span class="badge ${getConf(r.confidence)}">${r.confidence}</span></td>
+        <td><span class="badge bg-success">${r.status}</span></td>
+      </tr>`).join('');
+  }
+
+  function getConf(c) {
+    const v = parseInt(c);
+    if (v >= 80) return 'bg-success';
+    if (v >= 60) return 'bg-warning';
+    return 'bg-danger';
+  }
+
+  function exportReport() {
+    const date = document.getElementById('dateFilter').value;
+    const cls = document.getElementById('classFilter').value;
+    if (!date) { alert('Select a date first'); return; }
+    window.location.href = `/reports/export?${new URLSearchParams({date, class: cls})}`;
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('dateFilter').value = new Date().toISOString().split('T')[0];
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Students — Smart Attendance{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-start">
+  <div>
+    <h1><i class="bi bi-people-fill"></i> Students</h1>
+    <p>{{ students|length }} registered student{{ 's' if students|length != 1 else '' }}</p>
+  </div>
+  <a href="/students/register" class="btn btn-primary">
+    <i class="bi bi-person-plus-fill"></i> Register New
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h5><i class="bi bi-table"></i> All Students</h5>
+    <div style="max-width:280px; width:100%;">
+      <input type="text" id="searchInput" class="form-control" placeholder="Search students…" style="padding:7px 12px;">
+    </div>
+  </div>
+  <div class="card-body p-0">
+    {% if students %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" id="studentsTable">
+        <thead>
+          <tr>
+            <th>Roll No.</th>
+            <th>Name</th>
+            <th>Class</th>
+            <th>Department</th>
+            <th>Face Data</th>
+            <th>Registered</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for student in students %}
+          <tr>
+            <td><code>{{ student.roll_number }}</code></td>
+            <td><strong style="font-size:13.5px;">{{ student.name }}</strong></td>
+            <td><span class="badge bg-primary">{{ student.class_name }}</span></td>
+            <td style="color:var(--text-muted);">{{ student.department }}</td>
+            <td><span class="badge bg-info"><i class="bi bi-person-bounding-box"></i> {{ student.face_encodings|length }}</span></td>
+            <td style="color:var(--text-muted); font-size:12.5px;">{{ student.created_at.strftime('%d %b %Y') }}</td>
+            <td>
+              <button class="btn btn-sm btn-outline-danger" onclick="deleteStudent({{ student.id }}, '{{ student.name }}')">
+                <i class="bi bi-trash"></i>
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5" style="color:var(--text-dim);">
+      <i class="bi bi-people" style="font-size:48px;"></i>
+      <p class="mt-3" style="color:var(--text-muted); font-size:14px;">No students registered yet</p>
+      <a href="/students/register" class="btn btn-primary mt-2">
+        <i class="bi bi-person-plus-fill"></i> Register First Student
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-exclamation-triangle"></i> Confirm Delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Delete <strong id="deleteStudentName"></strong>?</p>
+        <p style="color:var(--danger); font-size:13px; margin:0;">
+          <i class="bi bi-exclamation-circle"></i> This will also delete all attendance records for this student.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.getElementById('searchInput').addEventListener('keyup', function() {
+    const f = this.value.toLowerCase();
+    document.querySelectorAll('#studentsTable tbody tr').forEach(row => {
+      row.style.display = row.textContent.toLowerCase().includes(f) ? '' : 'none';
+    });
+  });
+
+  let studentToDelete = null;
+  function deleteStudent(id, name) {
+    studentToDelete = id;
+    document.getElementById('deleteStudentName').textContent = name;
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+  }
+
+  document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+    if (studentToDelete) {
+      fetch(`/students/${studentToDelete}/delete`, { method:'POST' })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); });
+    }
+  });
+</script>
+{% endblock %}
