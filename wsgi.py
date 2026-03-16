@@ -1,11 +1,6 @@
-"""
-WSGI entry point for production deployment
-Used by Gunicorn, uWSGI, or other WSGI servers
-"""
 import os
 from app import app, db
 
-# Initialize database tables on startup
 with app.app_context():
     db.create_all()
 
